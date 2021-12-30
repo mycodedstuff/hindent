@@ -1300,26 +1300,27 @@ instance Pretty Module where
 
 -- | Format imports, preserving empty newlines between groups.
 formatImports :: [ImportDecl NodeInfo] -> Printer ()
-formatImports =
-  sequence_ .
-  intersperse (newline >> newline) .
-  map formatImportGroup . groupAdjacentBy atNextLine
+formatImports imports = do
+  config <- gets psConfig
+  sequence_ $
+    intersperse (newline >> newline) $
+    map (formatImportGroup config) $ groupAdjacentBy atNextLine imports
   where
     atNextLine import1 import2 =
       let end1 = srcSpanEndLine (srcInfoSpan (nodeInfoSpan (ann import1)))
           start2 = srcSpanStartLine (srcInfoSpan (nodeInfoSpan (ann import2)))
       in start2 - end1 <= 1
-    formatImportGroup imps = do
+    formatImportGroup config imps = do
       shouldSortImports <- gets $ configSortImports . psConfig
       let imps1 =
             if shouldSortImports
               then sortImports imps
               else imps
-      sequence_ . intersperse newline $ map formatImport imps1
+      sequence_ . intersperse newline $ map (formatImport config) imps1
     moduleVisibleName idecl =
       let ModuleName _ name = importModule idecl
       in name
-    formatImport = pretty
+    formatImport config imp = pretty $ ImportDeclWrapper imp (hasQualifiedInAny (configSpaceForQualified config))
     sortImports imps = sortOn moduleVisibleName . map sortImportSpecsOnImport $ imps
     sortImportSpecsOnImport imp = imp { importSpecs = fmap sortImportSpecs (importSpecs imp) }
     sortImportSpecs (ImportSpecList l hiding specs) = ImportSpecList l hiding sortedSpecs
@@ -1328,6 +1329,8 @@ formatImports =
 
         sortCNames (IThingWith l2 name cNames) = IThingWith l2 name . sortBy cNameCompare $ cNames
         sortCNames is = is
+    hasQualifiedInAny True = foldl (\acc import' -> acc || importQualified import') False imports
+    hasQualifiedInAny False = False
 
 groupAdjacentBy :: (a -> a -> Bool) -> [a] -> [[a]]
 groupAdjacentBy _ [] = []
@@ -1545,12 +1548,15 @@ instance Pretty ModuleHead where
 instance Pretty ModulePragma where
   prettyInternal = pretty'
 
-instance Pretty ImportDecl where
-  prettyInternal (ImportDecl _ name qualified source safe mpkg mas mspec) = do
+instance Pretty ImportDeclWrapper where
+  prettyInternal (ImportDeclWrapper imp spaceForQualified) = do
+    let (ImportDecl _ name qualified source safe mpkg mas mspec) = imp
     write "import"
     when source $ write " {-# SOURCE #-}"
     when safe $ write " safe"
-    when qualified $ write " qualified"
+    if qualified
+        then write " qualified"
+        else when spaceForQualified $ write "          "
     case mpkg of
       Nothing -> return ()
       Just pkg -> space >> write ("\"" ++ pkg ++ "\"")

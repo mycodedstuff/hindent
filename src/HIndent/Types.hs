@@ -5,6 +5,11 @@
 {-# LANGUAGE NamedFieldPuns #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE DeriveDataTypeable #-}
+{-# LANGUAGE DeriveFoldable #-}
+{-# LANGUAGE DeriveTraversable #-}
+{-# LANGUAGE DeriveFunctor #-}
+{-# LANGUAGE DeriveGeneric #-}
 
 -- | All types.
 
@@ -17,6 +22,7 @@ module HIndent.Types
   ,NodeInfo(..)
   ,NodeComment(..)
   ,SomeComment(..)
+  ,ImportDeclWrapper(..)
   ) where
 
 import           Control.Applicative
@@ -30,7 +36,11 @@ import           Data.Maybe
 import           Data.Yaml (FromJSON(..))
 import qualified Data.Yaml as Y
 import           Language.Haskell.Exts hiding (Style, prettyPrint, Pretty, style, parse)
+import           GHC.Generics (Generic)
+import           Data.Foldable (Foldable)
+import           Data.Traversable (Traversable)
 
+import Data.Data
 -- | A pretty printing monad.
 newtype Printer a =
   Printer {runPrinter :: StateT PrintState (MaybeT Identity) a}
@@ -69,6 +79,8 @@ data Config = Config
     , configLineBreaks :: [String] -- ^ Break line when meets these operators.
     , configExtensions :: [Extension]
       -- ^ Extra language extensions enabled by default.
+    , configSpaceForQualified :: !Bool
+      -- ^ Add space in imports if qualified isn't present
     }
 
 -- | Parse an extension.
@@ -103,7 +115,10 @@ instance FromJSON Config where
         (fromMaybe (configLineBreaks defaultConfig))
         (v Y..:? "line-breaks") <*>
       (traverse readExtension
-        =<< fmap (fromMaybe []) (v Y..:? "extensions"))
+        =<< fmap (fromMaybe []) (v Y..:? "extensions")) <*>
+      fmap
+        (fromMaybe (configSpaceForQualified defaultConfig))
+        (v Y..:? "space-for-qualified")
   parseJSON _ = fail "Expected Object for Config value"
 
 -- | Default style configuration.
@@ -116,6 +131,7 @@ defaultConfig =
     , configSortImports = True
     , configLineBreaks = []
     , configExtensions = []
+    , configSpaceForQualified = False
     }
 
 -- | Some comment to print.
@@ -141,3 +157,14 @@ instance Show NodeInfo where
   show (NodeInfo _ []) = ""
   show (NodeInfo _ s) =
     "{- " ++ show s ++ " -}"
+
+data ImportDeclWrapper a = ImportDeclWrapper
+  { importDecl :: ImportDecl a
+  , spaceForQualified :: Bool
+  }
+  deriving (Eq,Ord,Show,Typeable,Data,Foldable,Traversable,Functor,Generic)
+
+instance Annotated ImportDeclWrapper where
+    ann (ImportDeclWrapper (ImportDecl l _ _ _ _ _ _ _) _) = l
+    amap f (ImportDeclWrapper (ImportDecl l mn qual src safe pkg mmn mis) spaceForQualified) =
+        ImportDeclWrapper ((ImportDecl (f l) mn qual src safe pkg mmn mis)) spaceForQualified
