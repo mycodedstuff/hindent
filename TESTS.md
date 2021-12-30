@@ -124,6 +124,30 @@ import Name hiding ()
 import {-# SOURCE #-} safe qualified Module as M hiding (a, b, c, d, e, f)
 ```
 
+Add space for qualified with one import having qualified
+
+```haskell qualified given
+import Data.List
+import qualified Data.Text
+```
+
+```haskell qualified expect
+import           Data.List
+import qualified Data.Text
+```
+
+Add space for qualified with no import having qualified
+
+```haskell qualified given
+import Data.List
+import Data.Text
+```
+
+```haskell qualified expect
+import Data.List
+import Data.Text
+```
+
 # Declarations
 
 Type declaration

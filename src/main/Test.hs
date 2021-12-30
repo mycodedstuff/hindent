@@ -3,32 +3,32 @@
 -- | Test the pretty printer.
 module Main where
 
-import           Data.Algorithm.Diff
-import           Data.Algorithm.DiffOutput
+import Data.Algorithm.Diff
+import Data.Algorithm.DiffOutput
 import qualified Data.ByteString as S
-import           Data.ByteString.Lazy (ByteString)
+import Data.ByteString.Lazy (ByteString)
 import qualified Data.ByteString.Lazy as L
 import qualified Data.ByteString.Lazy.Builder as L
 import qualified Data.ByteString.Lazy.Char8 as L8
 import qualified Data.ByteString.Lazy.UTF8 as LUTF8
 import qualified Data.ByteString.UTF8 as UTF8
-import           Data.Function
-import           Data.Monoid
+import Data.Function
+import Data.Monoid
 import qualified HIndent
-import           HIndent.CodeBlock
-import           HIndent.Types
-import           Markdone
-import           Test.Hspec
+import HIndent.CodeBlock
+import HIndent.Types
+import Markdone
+import Test.Hspec
 
 -- | Main benchmarks.
 main :: IO ()
 main = do
-    bytes <- S.readFile "TESTS.md"
-    forest <- parse (tokenize bytes)
-    hspec $ do
-      codeBlocksSpec
-      markdoneSpec
-      toSpec forest
+  bytes <- S.readFile "TESTS.md"
+  forest <- parse (tokenize bytes)
+  hspec $ do
+    codeBlocksSpec
+    markdoneSpec
+    toSpec forest
 
 reformat :: Config -> S.ByteString -> ByteString
 reformat cfg code =
@@ -66,6 +66,16 @@ toSpec = go
         "haskell pending" -> do
           it (UTF8.toString desc) pending
           go next
+        "haskell qualified given" -> do
+          let cfg' = cfg {configSpaceForQualified = True}
+          case skipEmptyLines next of
+            CodeFence "haskell qualified expect" codeExpect:next' -> do
+              it (UTF8.toString desc) $
+                shouldBeReadable (reformat cfg' code) (L.fromStrict codeExpect)
+              go next'
+            _ ->
+              error
+                "'haskell qualified given' block must be followed by a 'haskell qualified expect' block"
         _ -> go next
     go (PlainText {}:next) = go next
     go (CodeFence {}:next) = go next
@@ -78,10 +88,11 @@ shouldBeReadable x y =
   shouldBe (Readable x (Just (diff y x))) (Readable y Nothing)
 
 -- | Prints a string without quoting and escaping.
-data Readable = Readable
-  { readableString :: ByteString
-  , readableDiff :: Maybe String
-  }
+data Readable =
+  Readable
+    { readableString :: ByteString
+    , readableDiff :: Maybe String
+    }
 
 instance Eq Readable where
   (==) = on (==) readableString

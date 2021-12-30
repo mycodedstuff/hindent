@@ -100,7 +100,8 @@ options config =
       lineLen <*>
       indentSpaces <*>
       trailingNewline <*>
-      sortImports
+      sortImports <*>
+      spaceForQualified
       ) <*
       optional (strOption
            (long "style" <> help "Style to print with (historical, now ignored)" <> metavar "STYLE") :: Parser String)
@@ -117,11 +118,13 @@ options config =
         flag Nothing (Just True) (long "sort-imports" <> help "Sort imports in groups" <> showDefault) <|>
          flag Nothing (Just False)  (long "no-sort-imports" <> help "Don't sort imports")
     action = flag Reformat Validate (long "validate" <> help "Check if files are formatted without changing them")
-    makeStyle s mlen tabs trailing imports =
+    spaceForQualified = flag False True (long "space-for-qualified" <> help "Add spaces when import doesn't have qualified in it")
+    makeStyle s mlen tabs trailing imports space =
       s
       { configMaxColumns = mlen
       , configIndentSpaces =  tabs
       , configTrailingNewline =  trailing
       , configSortImports =  fromMaybe (configSortImports s) imports
+      , configSpaceForQualified = space
       }
     files = many (strArgument (metavar "FILENAMES"))
